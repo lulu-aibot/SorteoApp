@@ -48,37 +48,64 @@ export default function GiveawayApp() {
     }
   };
 
-  const startExtraction = () => {
+  const startExtraction = async () => {
     setStep('extracting');
     setProgress(0);
     setExtractedCount(0);
     
-    // Simular extracción por WS / Polling Job ID en Backend
-    const totalSimulated = Math.floor(Math.random() * 500) + 150;
-    
+    // Animación visual del progreso mientras esperamos al backend
     let current = 0;
     const interval = setInterval(() => {
+      // Avanza el progreso falsamente para dar feedback al usuario
       current += Math.floor(Math.random() * 10) + 5;
-      if (current >= totalSimulated) {
-        current = totalSimulated;
-        clearInterval(interval);
-        generateMockParticipants(current);
-        setTimeout(() => {
-          setCountdown(10);
-          setStep('countdown');
-        }, 500);
-      }
-      setExtractedCount(current);
-      setProgress((current / totalSimulated) * 100);
-    }, 100);
-  };
+      if (current > 90) current = 90; // Nos clavamos en 90% hasta que termine el request
+      setProgress(current);
+      setExtractedCount(Math.floor(current * 1.5)); // Número falso dinámico de extracción en lo que dura la request
+    }, 150);
 
-  const generateMockParticipants = (count: number) => {
-    const mocks = Array.from({ length: count }).map((_, i) => ({
-      username: `user_${Math.floor(Math.random() * 10000)}`,
-      text: `Participando desde ${i} 🚀 #sorteo`
-    }));
-    setParticipants(mocks);
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ url })
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al extraer comentarios');
+      }
+
+      const data = await response.json();
+      
+      if (data.length === 0) {
+        throw new Error('No se encontraron comentarios. Puede que la publicación sea privada o requiera iniciar sesión.');
+      }
+
+      // Detenemos la animación falsa de carga
+      clearInterval(interval);
+      setProgress(100);
+      setExtractedCount(data.length);
+
+      // Usamos el texto de 'comment' devuelto por el API y lo mapeamos a 'text' para que empate con nuestro state anterior
+      const mappedParticipants = data.map((item: any) => ({
+        username: item.username,
+        text: item.comment // Mapeamos de `comment` a `text` según la estructura previa
+      }));
+      
+      setParticipants(mappedParticipants);
+      
+      // Una pequeña pausa para que el usuario alcance a ver el 100%
+      setTimeout(() => {
+        setCountdown(10);
+        setStep('countdown');
+      }, 500);
+
+    } catch (error: any) {
+      clearInterval(interval);
+      alert(error.message || 'Hubo un error al extraer los participantes. Revisa la consola o intenta de nuevo.');
+      setStep('config');
+    }
   };
 
   const startRoulette = () => {
