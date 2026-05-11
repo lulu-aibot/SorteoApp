@@ -23,59 +23,60 @@ async function startServer() {
     try {
       // Iniciar Playwright
       const { chromium } = await import("playwright");
-      const browser = await chromium.launch({ headless: true });
+      const browser = await chromium.launch({ headless: false });
       const context = await browser.newContext({
         userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
         viewport: { width: 1280, height: 800 }
       });
       const page = await context.newPage();
 
+      console.log("Abriendo Instagram...");
       // Navegar a la publicación con timeout de 15 segundos
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
       
-      // Esperar un poco a que Instagram renderice el contenido dinámico (React)
+      console.log("Esperando comentarios...");
+      await page.waitForSelector('article', { timeout: 15000 }).catch(() => console.log('Timeout esperando article'));
       await page.waitForTimeout(3000);
 
+      await page.screenshot({ path: 'debug-instagram.png' });
+
+      const html = await page.evaluate(() => document.body.innerHTML.slice(0, 3000));
+      console.log("DOM inicial (3000 chars):");
+      console.log(html);
+
       const comments = await page.evaluate(() => {
-        const elements = Array.from(document.querySelectorAll('ul li'));
+        const elements = Array.from(document.querySelectorAll('article ul li'));
         const extracted = [];
         
         for (const el of elements) {
             const links = Array.from(el.querySelectorAll('a'));
             if (links.length === 0) continue;
             
-            // Intenta encontrar el enlace que contiene el username (suele ser texto y sin imágenes dentro)
             const usernameLink = links.find(a => a.textContent && a.textContent.trim().length > 0 && !a.querySelector('img'));
-            if (!usernameLink) continue;
+            const username = usernameLink ? usernameLink.textContent.trim() : 'usuario_desconocido';
             
-            const username = usernameLink.textContent.trim();
-            
-            // Buscar texto del comentario (buscamos un span largo que no sea de UI)
             const spans = Array.from(el.querySelectorAll('span'));
             let commentText = '';
             for (const span of spans) {
                  const text = span.textContent?.trim();
-                 // Evitar textos de la interfaz de Instagram
-                 if (text && text !== username && !text.includes('Responder') && !text.includes('Me gusta') && !text.includes('Ver traducción')) {
-                     // Nos quedamos con el trozo de texto más largo para evitar quedarnos con cosas sueltas
-                     if (text.length > commentText.length) {
-                         commentText = text;
-                     }
+                 if (text && text !== username) {
+                     commentText += ' ' + text;
                  }
             }
             
-            if (username && commentText) {
+            commentText = commentText.trim();
+            if (commentText) {
                 extracted.push({ username, comment: commentText });
             }
         }
         
-        // Normalmente el primer 'li' es la descripción del post, la removemos si hay más elementos
-        return extracted.length > 1 ? extracted.slice(1) : extracted;
+        return extracted;
       });
+
+      console.log(`Comentarios encontrados: ${comments.length}`);
 
       await browser.close();
 
-      // Enviar resultados reales. Si Instagram bloquea (login wall), puede retornar pocos/ninguno.
       res.json(comments);
     } catch (error: any) {
       console.error("Error extrayendo comentarios:", error.message);

@@ -103,7 +103,7 @@ export default function CertificatePage() {
             </div>
           </CardContent>
           <div className="bg-slate-50 p-4 text-center text-xs text-slate-400 border-t border-slate-100">
-            Este certificado es generado por un algoritmo verificable e inmutable alojado en RaffleFlow.
+            Este certificado es generado por un algoritmo verificable e inmutable alojado en Lulu Giveaways.
           </div>
         </Card>
 
