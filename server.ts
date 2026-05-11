@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import fs from "fs";
 
 async function startServer() {
   console.log("Servidor iniciando...");
@@ -175,7 +176,13 @@ async function startServer() {
     // Modo Producción
     console.log("Configurando directorios estáticos para producción...");
     const distPath = path.join(process.cwd(), 'dist');
-    console.log("Ruta de dist:", distPath);
+    console.log("Ruta de dist actual:", distPath);
+    
+    if (fs.existsSync(distPath)) {
+      console.log("✓ Carpeta dist EXISTE. Contenido:", fs.readdirSync(distPath));
+    } else {
+      console.error("❌ ERROR CRÍTICO: La carpeta dist NO EXISTE. Revisa el proceso de build de Vite.");
+    }
     
     // Sirviendo estáticos
     app.use(express.static(distPath));
@@ -183,7 +190,13 @@ async function startServer() {
     // Capturar todos los requests
     app.get('*', (req, res) => {
       console.log(`[SPA Fallback] Sirviendo index.html para request: ${req.url}`);
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        console.error(`❌ [ERROR] No se encontró index.html en ${indexPath}`);
+        res.status(500).send("Error interno: Build de Vite no encontrado (index.html no existe).");
+      }
     });
   }
 
