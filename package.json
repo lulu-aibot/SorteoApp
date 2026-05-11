@@ -8,6 +8,7 @@
     "start": "node server.ts",
     "build": "vite build",
     "preview": "vite preview",
+    "postinstall": "npx playwright install chromium",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
