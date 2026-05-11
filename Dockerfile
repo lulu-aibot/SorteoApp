@@ -16,9 +16,6 @@ COPY . .
 # Construir la aplicación Frontend (Vite)
 RUN npm run build
 
-# Exponer el puerto
-EXPOSE 3000
-
 # Asegurar que el entorno sea producción
 ENV NODE_ENV=production
 

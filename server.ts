@@ -5,9 +5,9 @@ import path from "path";
 async function startServer() {
   console.log("Servidor iniciando...");
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = parseInt(process.env.PORT || '3000', 10);
   
-  console.log(`Puerto detectado: ${PORT}`);
+  console.log(`Puerto detectado (env): ${process.env.PORT}, usando: ${PORT}`);
 
   // Middleware para parsear JSON
   app.use(express.json());
@@ -15,6 +15,10 @@ async function startServer() {
   // ======================================
   // Rutas de nuestra API (Backend)
   // ======================================
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
   app.post("/api/comments", async (req, res) => {
     const { url } = req.body;
 
@@ -169,9 +173,16 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     // Modo Producción
+    console.log("Configurando directorios estáticos para producción...");
     const distPath = path.join(process.cwd(), 'dist');
+    console.log("Ruta de dist:", distPath);
+    
+    // Sirviendo estáticos
     app.use(express.static(distPath));
+    
+    // Capturar todos los requests
     app.get('*', (req, res) => {
+      console.log(`[SPA Fallback] Sirviendo index.html para request: ${req.url}`);
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
