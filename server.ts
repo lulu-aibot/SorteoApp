@@ -3,8 +3,11 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 
 async function startServer() {
+  console.log("Servidor iniciando...");
   const app = express();
   const PORT = process.env.PORT || 3000;
+  
+  console.log(`Puerto detectado: ${PORT}`);
 
   // Middleware para parsear JSON
   app.use(express.json());
@@ -174,7 +177,8 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Express escuchando en el puerto ${PORT}...`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

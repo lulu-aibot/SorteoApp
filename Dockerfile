@@ -6,8 +6,9 @@ WORKDIR /app
 # Copiar configuración de dependencias
 COPY package*.json ./
 
-# Instalar dependencias e instalar dependencias específicas de Playwright y navegadores
-RUN npm ci
+# Instalar TODAS las dependencias (necesarias para compilar vite y usar tsx)
+# Forzamos la instalación de devDependencies omitiendo el posible NODE_ENV de Railway
+RUN npm ci --include=dev
 
 # Copiar el resto del código
 COPY . .
@@ -21,5 +22,5 @@ EXPOSE 3000
 # Asegurar que el entorno sea producción
 ENV NODE_ENV=production
 
-# Ejecutar el script start
-CMD ["npm", "start"]
+# Ejecutar el server directamente con tsx
+CMD ["npx", "tsx", "server.ts"]
