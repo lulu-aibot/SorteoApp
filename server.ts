@@ -181,84 +181,92 @@ async function startServer() {
       console.log("Ejecutando script de extracción en el navegador...");
 
       const comments = await page.evaluate(() => {
-        // Obtenemos los elementos de las diferentes estructuras posibles en la versión web de Instagram (Post vs Reel)
-        const selectors = [
-          'article ul li',
-          'main ul li',
-          'ul.x1qjc9v5 li', // Clases ofuscadas comunes en FB/IG
-          'div.x1n2onr6 ul li'
-        ];
+        const text = document.body.innerText;
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         
-        let elements: Element[] = [];
-        for (const selector of selectors) {
-           const nodes = Array.from(document.querySelectorAll(selector));
-           // Nos quedamos con el selector que más elementos devuelva
-           if (nodes.length > elements.length) {
-               elements = nodes;
+        const extracted: {username: string, comment: string}[] = [];
+        
+        const isEndOfCommentNoise = (line: string) => {
+            const lower = line.toLowerCase();
+            if (lower === 'reply' || lower === 'responder') return true;
+            if (lower === 'like' || lower === 'likes' || lower === 'me gusta') return true;
+            if (line.length <= 5 && /^\d+\s*[hdwmsy]?$/.test(lower)) return true; // 3d
+            if (lower.includes(' likes') || lower.includes(' me gusta')) return true;
+            if (lower.startsWith('view replies') || lower.startsWith('ver respuestas') || lower.startsWith('ocultar')) return true;
+            if (lower.startsWith('view more') || lower.startsWith('ver más')) return true;
+            return false;
+        };
+        
+        const isGeneralNoise = (line: string) => {
+            const lower = line.toLowerCase();
+            const ignoreExact = [
+               'follow', 'see translation', 'ver traducción',
+               'log in', 'sign up', 'iniciar sesión', 'registrarte',
+               'search', 'buscar', 'home', 'inicio', 'explore', 'explorar',
+               'reels', 'messages', 'mensajes', 'notifications', 'notificaciones',
+               'create', 'crear', 'profile', 'perfil', 'more', 'más',
+               'verified', 'verificado', 'edited', 'editado', 'pinned', 'fijado',
+               'log', 'in', 'sign', 'up'
+            ];
+            if (ignoreExact.includes(lower)) return true;
+            if (lower.includes('log in to like')) return true;
+            return false;
+        };
+
+        let currentUsername: string | null = null;
+        let possibleComment: string | null = null;
+        
+        for (let i = 0; i < lines.length; i++) {
+           const line = lines[i];
+           
+           if (isGeneralNoise(line)) {
+               continue; 
+           }
+           
+           if (isEndOfCommentNoise(line)) {
+               if (currentUsername && possibleComment) {
+                   extracted.push({ username: currentUsername, comment: possibleComment });
+               }
+               currentUsername = null;
+               possibleComment = null;
+               continue;
+           }
+
+           if (!currentUsername) {
+               if (line.length <= 30 && !line.includes(' ')) {
+                   currentUsername = line;
+               }
+           } else {
+               if (!possibleComment) {
+                   possibleComment = line;
+               } else {
+                   possibleComment += ' ' + line;
+               }
+           }
+        }
+        
+        if (currentUsername && possibleComment) {
+           extracted.push({ username: currentUsername, comment: possibleComment });
+        }
+        
+        const unique: {username: string, comment: string}[] = [];
+        const seen = new Set();
+        for (const item of extracted) {
+           if (item.username.toLowerCase() === 'instagram') continue;
+           const key = `${item.username}:${item.comment}`;
+           if (!seen.has(key)) {
+               seen.add(key);
+               unique.push(item);
            }
         }
 
-        const extracted = [];
-        
-        for (const el of elements) {
-            // Ignorar basura (si el li está vacío o solo tiene un botón)
-            if (!el.textContent || el.textContent.trim() === '') continue;
-
-            const links = Array.from(el.querySelectorAll('a'));
-            
-            // Intenta encontrar el enlace que contiene el username
-            const usernameLink = links.find(a => a.textContent && a.textContent.trim().length > 0 && !a.querySelector('img'));
-            
-            let username = usernameLink ? usernameLink.textContent.trim() : null;
-            
-            if (!username) {
-                // Selector fallback h3
-                const h3 = el.querySelector('h3');
-                if (h3) username = h3.textContent?.trim() || null;
-            }
-
-            if (!username) continue; // No podemos seguir sin un username
-
-            // Extraemos texto de los spans
-            const spans = Array.from(el.querySelectorAll('span'));
-            let commentText = '';
-            
-            const ignoreExact = ['Responder', 'Ver traducción', 'Ocultar respuestas', 'Ver respuestas', 'Me gusta', 'Ver estadísticas'];
-            
-            for (const span of spans) {
-                 const text = span.textContent?.trim();
-                 if (!text) continue;
-                 
-                 // Ignorar textos de interfaces de IG
-                 if (text === username || ignoreExact.includes(text) || text.includes('Me gusta')) {
-                     continue;
-                 }
-                 
-                 // Ignorar fechas genéricas (1 s, 2 min, 10 h, 5 sem) si son cortas
-                 if (text.length <= 6 && /^\d+\s*(s|min|h|d|sem|w|m)$/i.test(text)) {
-                     continue;
-                 }
-                 
-                 // Evitar duplicar
-                 if (!commentText.includes(text)) {
-                     commentText += (commentText ? ' ' : '') + text;
-                 }
-            }
-            
-            commentText = commentText.trim();
-            if (commentText) {
-                // Verificar que no sea duplicado exacto
-                const exists = extracted.find(c => c.username === username && c.comment === commentText);
-                if (!exists) {
-                    extracted.push({ username, comment: commentText });
-                }
-            }
-        }
-        
-        return extracted;
+        return unique;
       });
 
-      console.log(`Se encontraron ${comments.length} comentarios reales en la vista actual.`);
+      console.log(`Se encontraron ${comments.length} comentarios (únicos y parseados heurísticamente).`);
+      
+      const usernamesSet = new Set(comments.map(c => c.username));
+      console.log(`Usernames únicos detectados (${usernamesSet.size}):`, Array.from(usernamesSet).slice(0, 5), '...');
 
       await browser.close();
 
