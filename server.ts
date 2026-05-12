@@ -54,6 +54,46 @@ async function startServer() {
       // Navegar a la publicación con timeout de 15 segundos
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
       
+      console.log("Comprobando popup de Instagram...");
+      try {
+        await page.waitForTimeout(3000); // 3 segundos para que aparezca el popup
+        const closeSelectors = [
+          'svg[aria-label="Cerrar"]',
+          'svg[aria-label="Close"]',
+          'div[role="dialog"] svg[aria-label="Cerrar"]',
+          'div[role="dialog"] svg[aria-label="Close"]',
+          'div[role="dialog"] [role="button"]',
+          'button svg',
+          '[role="button"] svg'
+        ];
+
+        let popupCerrado = false;
+        
+        // Buscar y clickear el primer selector que funcione y sea visible
+        for (const selector of closeSelectors) {
+          // Buscamos elementos
+          const elements = await page.$$(selector);
+          for (const el of elements) {
+             const isVisible = await el.isVisible();
+             if (isVisible) {
+                console.log(`popup detectado (selector: ${selector})`);
+                await el.click({ force: true });
+                console.log("popup cerrado");
+                popupCerrado = true;
+                await page.waitForTimeout(2000); // 2 segundos después de cerrar
+                break;
+             }
+          }
+          if (popupCerrado) break;
+        }
+        
+        if (!popupCerrado) {
+            console.log("No se detectó el popup (o no bloquea la vista).");
+        }
+      } catch (e) {
+        console.log("Error al manejar popup (ignorando):", e);
+      }
+
       console.log("Esperando comentarios (dinámicamente)...");
       try {
         await Promise.race([
