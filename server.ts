@@ -178,99 +178,113 @@ async function startServer() {
 
       await page.screenshot({ path: 'debug-instagram.png' });
 
-      console.log("Ejecutando script de extracción en el navegador...");
+      try {
+        console.log("Ejecutando script de extracción en el navegador...");
 
-      const comments = await page.evaluate(() => {
-        const text = document.body.innerText;
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        
-        const extracted: {username: string, comment: string}[] = [];
-        
-        const isEndOfCommentNoise = (line: string) => {
-            const lower = line.toLowerCase();
-            if (lower === 'reply' || lower === 'responder') return true;
-            if (lower === 'like' || lower === 'likes' || lower === 'me gusta') return true;
-            if (line.length <= 5 && /^\d+\s*[hdwmsy]?$/.test(lower)) return true; // 3d
-            if (lower.includes(' likes') || lower.includes(' me gusta')) return true;
-            if (lower.startsWith('view replies') || lower.startsWith('ver respuestas') || lower.startsWith('ocultar')) return true;
-            if (lower.startsWith('view more') || lower.startsWith('ver más')) return true;
-            return false;
-        };
-        
-        const isGeneralNoise = (line: string) => {
-            const lower = line.toLowerCase();
-            const ignoreExact = [
-               'follow', 'see translation', 'ver traducción',
-               'log in', 'sign up', 'iniciar sesión', 'registrarte',
-               'search', 'buscar', 'home', 'inicio', 'explore', 'explorar',
-               'reels', 'messages', 'mensajes', 'notifications', 'notificaciones',
-               'create', 'crear', 'profile', 'perfil', 'more', 'más',
-               'verified', 'verificado', 'edited', 'editado', 'pinned', 'fijado',
-               'log', 'in', 'sign', 'up'
-            ];
-            if (ignoreExact.includes(lower)) return true;
-            if (lower.includes('log in to like')) return true;
-            return false;
-        };
+        const comments = await page.evaluate(() => {
+          const result: {username: string, comment: string}[] = [];
+          try {
+            const text = document.body.innerText || '';
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            const isNoise = (line: string) => {
+                const lower = line.toLowerCase();
+                const exactNoise = [
+                   'like', 'reply', 'log in', 'sign up', 'meta', 'threads', 'api', 'privacy',
+                   'locations', 'terms', 'top accounts', 'hashtags', 'language', 'english',
+                   'iniciar sesión', 'registrarte', 'me gusta', 'responder', 'ver todos',
+                   'ver más', 'view more', 'follow', 'seguir', 'verified', 'verificado'
+                ];
+                if (exactNoise.includes(lower)) return true;
+                if (lower.includes(' likes') || lower.includes(' me gusta')) return true;
+                if (/^\d+\s*like[s]?$/.test(lower)) return true;
+                if (/^\d+\s*[hdwmsy]?$/.test(lower)) return true; // 2d, 3w, 5h, 15m, 10s
+                if (lower.includes('log in to like')) return true;
+                if (lower.startsWith('view replies')) return true;
+                if (lower.startsWith('ver respuestas')) return true;
+                if (lower.startsWith('hide replies')) return true;
+                if (lower.startsWith('ocultar respuestas')) return true;
+                return false;
+            };
 
-        let currentUsername: string | null = null;
-        let possibleComment: string | null = null;
-        
-        for (let i = 0; i < lines.length; i++) {
-           const line = lines[i];
-           
-           if (isGeneralNoise(line)) {
-               continue; 
-           }
-           
-           if (isEndOfCommentNoise(line)) {
-               if (currentUsername && possibleComment) {
-                   extracted.push({ username: currentUsername, comment: possibleComment });
-               }
-               currentUsername = null;
-               possibleComment = null;
-               continue;
-           }
+            const isPossibleUsername = (line: string) => {
+                if (line.length < 3 || line.length > 30) return false;
+                if (line.includes('  ')) return false; // sin espacios largos
+                const wordCount = line.split(' ').length;
+                if (wordCount > 3) return false; // username no suele tener muchas palabras
+                // Emojis básicos permitidos pero no textazos
+                return true;
+            };
 
-           if (!currentUsername) {
-               if (line.length <= 30 && !line.includes(' ')) {
-                   currentUsername = line;
-               }
-           } else {
-               if (!possibleComment) {
-                   possibleComment = line;
-               } else {
-                   possibleComment += ' ' + line;
-               }
-           }
+            let currentUsername: string | null = null;
+            let currentComment: string | null = null;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+
+                if (isNoise(line)) {
+                    // Terminamos el comentario anterior, lo guardamos si existe
+                    if (currentUsername && currentComment && currentComment.length > 3 && currentUsername.length > 2) {
+                        result.push({ username: currentUsername, comment: currentComment });
+                    }
+                    currentUsername = null;
+                    currentComment = null;
+                    continue;
+                }
+
+                if (!currentUsername) {
+                    if (isPossibleUsername(line)) {
+                        currentUsername = line;
+                    }
+                } else {
+                    // Ya tenemos username, esta línea es parte del comentario
+                    if (!currentComment) {
+                        currentComment = line;
+                    } else {
+                        currentComment += ' ' + line;
+                    }
+                }
+            }
+            
+            // Guardar el último
+            if (currentUsername && currentComment && currentComment.length > 3 && currentUsername.length > 2) {
+                result.push({ username: currentUsername, comment: currentComment });
+            }
+
+            // Filtrar duplicados
+            const unique: typeof result = [];
+            const seen = new Set();
+            for (const item of result) {
+                if (item.username.toLowerCase() === 'instagram') continue;
+                const key = `${item.username}:${item.comment}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    unique.push(item);
+                }
+            }
+
+            return unique;
+          } catch (err) {
+            // Si falla el parser en el navegador, devolvemos lo que tengamos
+            return result;
+          }
+        });
+
+        console.log(`Participantes parseados: ${comments.length}`);
+        
+        if (comments.length > 0) {
+            console.log("Ejemplos de usernames:", comments.slice(0, 3).map(c => c.username).join(', '));
+            console.log("Ejemplos de comentarios:", comments.slice(0, 3).map(c => c.comment.substring(0, 50) + "...").join(' | '));
         }
-        
-        if (currentUsername && possibleComment) {
-           extracted.push({ username: currentUsername, comment: possibleComment });
-        }
-        
-        const unique: {username: string, comment: string}[] = [];
-        const seen = new Set();
-        for (const item of extracted) {
-           if (item.username.toLowerCase() === 'instagram') continue;
-           const key = `${item.username}:${item.comment}`;
-           if (!seen.has(key)) {
-               seen.add(key);
-               unique.push(item);
-           }
-        }
 
-        return unique;
-      });
+        await browser.close();
+        res.json(comments);
 
-      console.log(`Se encontraron ${comments.length} comentarios (únicos y parseados heurísticamente).`);
-      
-      const usernamesSet = new Set(comments.map(c => c.username));
-      console.log(`Usernames únicos detectados (${usernamesSet.size}):`, Array.from(usernamesSet).slice(0, 5), '...');
-
-      await browser.close();
-
-      res.json(comments);
+      } catch (browserError) {
+        console.error("Error crítico ejecutando Playwright evaluate:", browserError);
+        await browser.close();
+        res.status(500).json({ error: "Fallo crítico en el extractor web." });
+      }
     } catch (error: any) {
       console.error("Error extrayendo comentarios:", error.message);
       res.status(500).json({ error: "No se pudieron extraer los comentarios o se alcanzó el timeout." });
