@@ -107,7 +107,34 @@ async function startServer() {
       }
 
       // Una pausa para asegurar que el listado de comentarios de React terminó de inflarse
-      await page.waitForTimeout(4000);
+      await page.waitForTimeout(5000);
+
+      try {
+        console.log("Intentando click automático en 'Ver más comentarios'...");
+        // Intentar hacer click en svg u otras instancias que indiquen cargar más
+        const svgClick = await page.locator('svg[aria-label="Cargar más comentarios"], svg[aria-label="Load more comments"]').first().click({ timeout: 2000 }).catch(() => false);
+        if (svgClick === false) {
+           await page.locator('text=/.*más comentarios.*/i').first().click({ timeout: 2000 }).catch(() => false);
+        }
+      } catch (e) {
+        console.log("No se pudo hacer click en 'Ver más comentarios'", e);
+      }
+      
+      // Una pausa post-click
+      await page.waitForTimeout(2000);
+
+      // Logs de elementos encontrados
+      const spanCount = await page.$$eval('span', els => els.length).catch(() => 0);
+      const liCount = await page.$$eval('li', els => els.length).catch(() => 0);
+      const articleCount = await page.$$eval('article', els => els.length).catch(() => 0);
+      
+      console.log(`Cantidad de spans encontrados: ${spanCount}`);
+      console.log(`Cantidad de li encontrados: ${liCount}`);
+      console.log(`Cantidad de article encontrados: ${articleCount}`);
+
+      const htmlContent = await page.content();
+      await fs.promises.writeFile('debug-instagram.html', htmlContent);
+      console.log("HTML guardado en debug-instagram.html");
 
       await page.screenshot({ path: 'debug-instagram.png' });
 
@@ -208,6 +235,15 @@ async function startServer() {
       res.sendFile(imagePath);
     } else {
       res.status(404).send("La imagen de debug no existe aún. Ejecuta una extracción primero.");
+    }
+  });
+
+  app.get("/api/debug-instagram-html", (req, res) => {
+    const htmlPath = path.join(process.cwd(), 'debug-instagram.html');
+    if (fs.existsSync(htmlPath)) {
+      res.sendFile(htmlPath);
+    } else {
+      res.status(404).send("El HTML de debug no existe aún. Ejecuta una extracción primero.");
     }
   });
 
