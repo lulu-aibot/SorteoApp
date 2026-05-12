@@ -162,6 +162,15 @@ async function startServer() {
     }
   });
 
+  app.get("/api/debug-instagram-image", (req, res) => {
+    const imagePath = path.join(process.cwd(), 'debug-instagram.png');
+    if (fs.existsSync(imagePath)) {
+      res.sendFile(imagePath);
+    } else {
+      res.status(404).send("La imagen de debug no existe aún. Ejecuta una extracción primero.");
+    }
+  });
+
   // ======================================
   // Vite Middleware (Frontend Dev & Prod Server)
   // ======================================
