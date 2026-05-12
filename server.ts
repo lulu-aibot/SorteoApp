@@ -184,58 +184,39 @@ async function startServer() {
         const comments = await page.evaluate(() => {
           let result: {username: string, comment: string}[] = [];
           try {
-            // Buscamos el contenedor específico (ul principal de comentarios)
-            const ul = document.querySelector('ul._a9z6._a9za') || document.querySelector('article ul') || document.querySelector('main ul');
+            const text = document.body.innerText || '';
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             
-            if (ul) {
-                const commentNodes = ul.querySelectorAll('li');
+            for (let i = 0; i < lines.length - 1; i++) {
+                const line1 = lines[i];
+                const line2 = lines[i+1];
                 
-                commentNodes.forEach(node => {
-                    const anchors = Array.from(node.querySelectorAll('a'));
-                    const spans = Array.from(node.querySelectorAll('span'));
-                    
-                    let username = '';
-                    let commentText = '';
-                    
-                    // Usernameuele ser el primer anchor (después del de imagen a veces) que tiene texto
-                    const usernameAnchor = anchors.find(a => a.textContent && a.textContent.trim().length > 0 && !a.querySelector('img'));
-                    if (usernameAnchor) {
-                        username = usernameAnchor.textContent!.trim();
-                    } else {
-                        // Fallback: sometimes username is inside a span/h3 inside div
-                        const h3 = node.querySelector('h3');
-                        if (h3) username = h3.textContent!.trim();
-                    }
-                    
-                    const noise = [
-                        'like', 'reply', 'responder', 'me gusta', 'ver traducción', 'see translation', 
-                        'hide', 'ocultar', 'hide replies', 'ocultar respuestas', 'ver respuestas',
-                        'view replies', 'verified', 'verificado'
-                    ];
+                // Ignoramos ruido muy obvio
+                const lower = line1.toLowerCase();
+                const isNoise = ['like', 'reply', 'log in', 'sign up', 'meta', 'threads', 'api', 'privacy',
+                   'locations', 'terms', 'top accounts', 'hashtags', 'language', 'english',
+                   'iniciar sesión', 'registrarte', 'me gusta', 'responder', 'ver todos',
+                   'ver más', 'view more', 'follow', 'seguir', 'verified', 'verificado'
+                ].includes(lower) || /^\d+\s*[hdwmsy]?$/.test(lower) || lower.includes('likes') || lower.includes('me gusta');
 
-                    const validSpans = spans.filter(s => {
-                        const t = s.textContent?.trim().toLowerCase() || '';
-                        if (!t) return false;
-                        if (noise.includes(t)) return false;
-                        if (t === username.toLowerCase()) return false;
-                        if (/^\d+\s*[hdwmsy]?$/.test(t)) return false; // Fechas cortas
-                        if (/^\d+\s*like[s]?$/.test(t)) return false;
-                        if (/^\d+\s*me gusta$/.test(t)) return false;
-                        return true;
-                    });
+                if (isNoise) continue;
+
+                // Username: menos de 30 caracteres, sin espacios dobles marcados
+                if (line1.length < 30 && !line1.includes('  ') && line1.length > 1) {
+                    // Evitar que la linea 2 sea ruido evidente
+                    const lower2 = line2.toLowerCase();
+                    if (lower2 === 'reply' || lower2 === 'responder' || lower2.includes('like') || lower2.includes('me gusta')) continue;
                     
-                    for (const s of validSpans) {
-                        const t = s.textContent!.trim();
-                        // Evitar concatenar sub-spans que ya están contenidos
-                        if (!commentText.includes(t)) {
-                            commentText += (commentText ? ' ' : '') + t;
-                        }
-                    }
-                    
-                    if (username && commentText && username.length > 2 && commentText.length > 1) {
-                        result.push({ username, comment: commentText });
-                    }
-                });
+                    result.push({ username: line1, comment: line2 });
+                    i++; // skip next line as it's the comment
+                }
+            }
+
+            // Fallback si no encontramos nada
+            if (result.length === 0 && lines.length > 5) {
+                for (let i = Math.max(0, lines.length - 10); i < lines.length - 1; i += 2) {
+                   result.push({ username: lines[i].substring(0, 20), comment: lines[i+1].substring(0, 50) });
+                }
             }
             
             // Clean specific instagram username match
@@ -259,16 +240,8 @@ async function startServer() {
           }
         });
 
-        console.log("Comentarios reales extraídos:", comments);
+        console.log("PARTICIPANTS FINAL:", comments);
         
-        // Si no se encuentran comentarios, guardamos el HTML y Screenshot para debugging
-        if (!comments || comments.length === 0) {
-            console.log("No se encontraron comentarios. Guardando debug page...");
-            const htmlContent = await page.content();
-            await fs.promises.writeFile('debug-instagram-empty.html', htmlContent, 'utf-8');
-            await page.screenshot({ path: 'debug-instagram-empty.png' });
-        }
-
         await browser.close();
         
         if (comments && comments.length > 0) {
