@@ -17,7 +17,7 @@ export default function CertificatePage() {
     } else {
       // Si entra directo, simular un fetch (en prod iría a la API)
       setData({
-        winner: { username: "usuario_ejemplo", text: "¡Yo quiero ganar! ❤️" },
+        winner: { username: "usuario_ejemplo", comment: "¡Yo quiero ganar! ❤️" },
         total: 1254,
         url: "https://instagram.com/p/ejemplo",
         config: { filterDuplicates: true, keyword: "" }
@@ -53,10 +53,13 @@ export default function CertificatePage() {
         <Card className="border-t-4 border-t-indigo-600 shadow-lg overflow-hidden bg-white mb-8">
           <CardHeader className="bg-slate-50/50 border-b border-slate-100 pb-8 text-center pt-10">
             <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-            <h2 className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-2">GANADOR OFICIAL</h2>
+            <h2 className="text-sm font-bold tracking-widest text-slate-400 uppercase mb-2">🏆 GANADOR OFICIAL</h2>
             <p className="text-4xl font-black text-slate-900">@{data.winner.username}</p>
-            <div className="mt-4 inline-flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 text-slate-600 italic text-sm">
-              "{data.winner.text}"
+            <div className="mt-6 flex flex-col items-center gap-1 bg-white px-6 py-4 rounded-xl border border-slate-200 text-slate-600 shadow-sm max-w-lg mx-auto w-full">
+              <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">💬 Comentario</span>
+              <span className="italic text-base text-slate-700 line-clamp-4 break-words w-full text-center">
+                "{data.winner.comment || "Comentario no disponible"}"
+              </span>
             </div>
           </CardHeader>
           <CardContent className="p-8">

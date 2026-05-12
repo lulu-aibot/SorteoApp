@@ -29,7 +29,7 @@ export default function GiveawayApp() {
   const [extractedCount, setExtractedCount] = useState(0);
 
   // Roulette & Countdown State
-  const [participants, setParticipants] = useState<{username: string, text: string}[]>([]);
+  const [participants, setParticipants] = useState<{username: string, comment: string}[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [countdown, setCountdown] = useState(10);
 
@@ -87,10 +87,9 @@ export default function GiveawayApp() {
       setProgress(100);
       setExtractedCount(data.length);
 
-      // Usamos el texto de 'comment' devuelto por el API y lo mapeamos a 'text' para que empate con nuestro state anterior
       const mappedParticipants = data.map((item: any) => ({
         username: item.username,
-        text: item.comment // Mapeamos de `comment` a `text` según la estructura previa
+        comment: item.comment || "Comentario no disponible"
       }));
       
       setParticipants(mappedParticipants);
@@ -112,9 +111,11 @@ export default function GiveawayApp() {
     // Animación de ruleta
     let jumps = 0;
     const maxJumps = 40;
+    let currentLocalIndex = 0;
     
     const tick = () => {
-      setCurrentIndex(Math.floor(Math.random() * participants.length));
+      currentLocalIndex = Math.floor(Math.random() * participants.length);
+      setCurrentIndex(currentLocalIndex);
       jumps++;
       if (jumps < maxJumps) {
         setTimeout(tick, jumps * 5); // Desaceleración
@@ -125,7 +126,7 @@ export default function GiveawayApp() {
         setTimeout(() => {
           navigate(`/cert/${id}`, { 
             state: { 
-              winner: participants[currentIndex], // Simplificación 1 ganador
+              winner: participants[currentLocalIndex], // Simplificación 1 ganador
               total: participants.length,
               url,
               config: { filterDuplicates, keyword }
@@ -320,9 +321,12 @@ export default function GiveawayApp() {
                 <p className="text-3xl font-bold text-slate-800 break-words">
                   @{participants[currentIndex]?.username}
                 </p>
-                <p className="text-sm text-slate-500 italic mt-4 line-clamp-2">
-                  "{participants[currentIndex]?.text}"
-                </p>
+                <div className="mt-4">
+                  <p className="text-xs uppercase font-bold text-slate-400 mb-1 tracking-wider">💬 Comentario:</p>
+                  <p className="text-sm text-slate-600 italic line-clamp-3">
+                    "{participants[currentIndex]?.comment || "Comentario no disponible"}"
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
