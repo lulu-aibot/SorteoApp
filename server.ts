@@ -124,16 +124,56 @@ async function startServer() {
       await page.waitForTimeout(2000);
 
       // Logs de elementos encontrados
+      const divCount = await page.$$eval('div', els => els.length).catch(() => 0);
       const spanCount = await page.$$eval('span', els => els.length).catch(() => 0);
-      const liCount = await page.$$eval('li', els => els.length).catch(() => 0);
       const articleCount = await page.$$eval('article', els => els.length).catch(() => 0);
+      const sectionCount = await page.$$eval('section', els => els.length).catch(() => 0);
+      const buttonCount = await page.$$eval('button', els => els.length).catch(() => 0);
       
+      console.log(`Cantidad de div encontrados: ${divCount}`);
       console.log(`Cantidad de spans encontrados: ${spanCount}`);
-      console.log(`Cantidad de li encontrados: ${liCount}`);
       console.log(`Cantidad de article encontrados: ${articleCount}`);
+      console.log(`Cantidad de section encontrados: ${sectionCount}`);
+      console.log(`Cantidad de button encontrados: ${buttonCount}`);
+
+      const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 5000));
+      console.log("=== BODY INNER TEXT (first 5000 chars) ===");
+      console.log(bodyText);
+      console.log("==========================================");
+
+      try {
+        console.log("Buscando botones 'comments', 'comentarios', 'View all comments', 'Ver los comentarios'...");
+        const possibleTexts = [
+          'comments', 'comentarios', 'view all comments', 'ver los comentarios',
+          'ver todos los comentarios', 'view comments', 'ver comentarios'
+        ];
+        
+        const buttonsClicked = await page.evaluate((texts) => {
+          let clicked = false;
+          // Buscar en elementos clickeables potenciales
+          const elements = Array.from(document.querySelectorAll('button, div[role="button"], span, svg'));
+          for (const el of elements) {
+            const textContent = el.textContent?.trim().toLowerCase() || '';
+            const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+            
+            if (texts.some(t => textContent.includes(t) || ariaLabel.includes(t))) {
+               (el as HTMLElement).click();
+               clicked = true;
+               console.log("Clickeado interno en:", textContent || ariaLabel);
+               break;
+            }
+          }
+          return clicked;
+        }, possibleTexts);
+        console.log(`¿Click en algún botón de comentarios? ${buttonsClicked}`);
+      } catch (e) {
+        console.log("Error buscando/clickeando botones de comentarios:", e);
+      }
+
+      await page.waitForTimeout(5000);
 
       const htmlContent = await page.content();
-      await fs.promises.writeFile('debug-instagram.html', htmlContent);
+      await fs.promises.writeFile('debug-instagram.html', htmlContent, 'utf-8');
       console.log("HTML guardado en debug-instagram.html");
 
       await page.screenshot({ path: 'debug-instagram.png' });
