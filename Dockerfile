@@ -6,6 +6,9 @@ WORKDIR /app
 # Copiar configuración de dependencias
 COPY package*.json ./
 
+# Asegurar que Playwright instale navegadores dentro de node_modules (para evitar problemas de permisos/rutas)
+ENV PLAYWRIGHT_BROWSERS_PATH=0
+
 # Instalar TODAS las dependencias (necesarias para compilar vite y usar tsx)
 # Forzamos la instalación de devDependencies omitiendo el posible NODE_ENV de Railway
 RUN npm ci --include=dev
